@@ -18,20 +18,16 @@ import unittest
 
 import os
 
+from mycroft.configuration import Configuration
 from test.integrationtests.skills.skill_tester import MockSkillsLoader
 from test.integrationtests.skills.skill_tester import SkillTest
 
-SKILL_PATH = '/opt/mycroft/skills'
 
-
-def discover_tests():
-    global SKILL_PATH
-    if len(sys.argv) > 1:
-        SKILL_PATH = sys.argv.pop(1)
+def discover_tests(skills_dir):
     tests = {}
     skills = [
         skill for skill
-        in glob.glob(SKILL_PATH + '/*')
+        in glob.glob(skills_dir + '/*')
         if os.path.isdir(skill)
     ]
 
@@ -46,6 +42,12 @@ def discover_tests():
     return tests
 
 
+def get_skills_dir():
+    if len(sys.argv) > 1:
+        return sys.argv[1]
+    return Configuration.get()['skills']['msm']['directory']
+
+
 class IntentTestSequenceMeta(type):
     def __new__(mcs, name, bases, d):
         def gen_test(a, b):
@@ -53,7 +55,7 @@ class IntentTestSequenceMeta(type):
                 SkillTest(a, b, self.emitter).run(self.loader)
             return test
 
-        tests = discover_tests()
+        tests = discover_tests(get_skills_dir())
         for skill in tests.keys():
             skill_name = os.path.basename(skill)  # Path of the skill
             for example in tests[skill]:
@@ -71,7 +73,7 @@ class IntentTestSequence(unittest.TestCase):
 
     @classmethod
     def setUpClass(self):
-        self.loader = MockSkillsLoader(SKILL_PATH)
+        self.loader = MockSkillsLoader(get_skills_dir())
         self.emitter = self.loader.load_skills()
 
     @classmethod
