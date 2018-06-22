@@ -23,6 +23,10 @@ from mycroft.api import STTApi
 from mycroft.configuration import Configuration
 from mycroft.util.log import LOG
 
+import xml.etree.ElementTree as XmlElementTree
+import httplib2
+import uuid
+
 
 class STT(object):
     __metaclass__ = ABCMeta
@@ -137,6 +141,7 @@ class MycroftSTT(STT):
 
 class MycroftDeepSpeechSTT(STT):
     """Mycroft Hosted DeepSpeech"""
+
     def __init__(self):
         super(MycroftDeepSpeechSTT, self).__init__()
         self.api = STTApi("deepspeech")
@@ -154,6 +159,7 @@ class DeepSpeechServerSTT(STT):
         https://github.com/MainRo/deepspeech-server
         use this if you want to host DeepSpeech yourself
     """
+
     def __init__(self):
         super(DeepSpeechServerSTT, self).__init__()
 
@@ -201,6 +207,86 @@ class HoundifySTT(KeySTT):
         return self.recognizer.recognize_houndify(audio, self.id, self.key)
 
 
+class SpeechException(Exception):
+    pass
+
+
+class YaCloudSTT(STT):
+    CHUNK_SIZE = 1024 ** 2
+
+    def __init__(self):
+        super(YaCloudSTT, self).__init__()
+        self.token = str(self.config.get("token"))
+
+    @staticmethod
+    def read_chunks(chunk_size, bytes):
+        while True:
+            chunk = bytes[:chunk_size]
+            bytes = bytes[chunk_size:]
+            yield chunk
+            if not bytes:
+                break
+
+    def speech_to_text(self, key, filename=None, bytes=None, request_id=uuid.uuid4().hex, topic='notes', lang='ru-RU'):
+        if filename:
+            with open(filename, 'br') as file:
+                bytes = file.read()
+
+        if not bytes:
+            raise Exception('Neither file name nor bytes provided.')
+
+        url = '/asr_xml?uuid=%s&key=%s&topic=%s&lang=%s' % (
+            request_id,
+            key,
+            topic,
+            lang
+        )
+
+        chunks = self.read_chunks(YaCloudSTT.CHUNK_SIZE, bytes)
+
+        connection = httplib2.HTTPConnectionWithTimeout('asr.yandex.net')
+
+        connection.connect()
+        connection.putrequest('POST', url)
+        connection.putheader('Transfer-Encoding', 'chunked')
+        connection.putheader('Content-Type', 'audio/x-wav')  # x-pcm;bit=16;rate=16000
+        connection.endheaders()
+        for chunk in chunks:
+            connection.send(('%s\r\n' % hex(len(chunk))[2:]).encode())
+            connection.send(chunk)
+            connection.send('\r\n'.encode())
+        connection.send('0\r\n\r\n'.encode())
+        response = connection.getresponse()
+
+        if response.code == 200:
+            response_text = response.read()
+            xml = XmlElementTree.fromstring(response_text)
+
+            if int(xml.attrib['success']) == 1:
+                max_confidence = - float("inf")
+                text = ''
+
+                for child in xml:
+                    if float(child.attrib['confidence']) > max_confidence:
+                        text = child.text
+                        max_confidence = float(child.attrib['confidence'])
+
+                if max_confidence != - float("inf"):
+                    return text
+                else:
+                    raise SpeechException('No text found.\n\nResponse:\n%s' % response_text)
+            else:
+                raise SpeechException('No text found.\n\nResponse:\n%s' % response_text)
+        else:
+            raise SpeechException('Unknown error.\nCode: %s\n\n%s' % (response.code, response.read()))
+
+    def execute(self, audio, language=None):
+        self.lang = language or self.lang
+        return self.speech_to_text(self.token,
+                                   bytes=audio.get_wav_data(),
+                                   lang=self.lang)
+
+
 class STTFactory(object):
     CLASSES = {
         "mycroft": MycroftSTT,
@@ -212,7 +298,8 @@ class STTFactory(object):
         "bing": BingSTT,
         "houndify": HoundifySTT,
         "deepspeech_server": DeepSpeechServerSTT,
-        "mycroft_deepspeech": MycroftDeepSpeechSTT
+        "mycroft_deepspeech": MycroftDeepSpeechSTT,
+        "ya_cloud": YaCloudSTT
     }
 
     @staticmethod
