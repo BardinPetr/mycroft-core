@@ -21,6 +21,7 @@ from mycroft.util.lang.parse_pt import *
 from mycroft.util.lang.parse_es import *
 from mycroft.util.lang.parse_it import *
 from mycroft.util.lang.parse_sv import *
+from mycroft.util.lang.parse_ru import *
 
 from mycroft.util.lang.parse_fr import extractnumber_fr
 from mycroft.util.lang.parse_fr import extract_datetime_fr
@@ -88,6 +89,8 @@ def extractnumber(text, lang="en-us"):
         return extractnumber_fr(text)
     elif lang_lower.startswith("sv"):
         return extractnumber_sv(text)
+    elif lang_lower.startswith("ru"):
+        return extractnumber_ru(text)
     # TODO: extractnumber for other languages
     return text
 
@@ -126,13 +129,13 @@ def extract_datetime(text, anchorDate=None, lang="en-us"):
 
         >>> extract_datetime(
         ... "What is the weather like the day after tomorrow?",
-        ... datetime(2017, 06, 30, 00, 00)
+        ... datetime(2017, 6, 30, 0, 0)
         ... )
         [datetime.datetime(2017, 7, 2, 0, 0), 'what is weather like']
 
         >>> extract_datetime(
         ... "Set up an appointment 2 weeks from Sunday at 5 pm",
-        ... datetime(2016, 02, 19, 00, 00)
+        ... datetime(2016, 2, 19, 0, 0)
         ... )
         [datetime.datetime(2016, 3, 6, 17, 0), 'set up appointment']
     """
@@ -149,8 +152,12 @@ def extract_datetime(text, anchorDate=None, lang="en-us"):
         return extract_datetime_fr(text, anchorDate)
     elif lang_lower.startswith("sv"):
         return extract_datetime_sv(text, anchorDate)
+    elif lang_lower.startswith("ru"):
+        return extract_datetime_ru(text, anchorDate)
     # TODO: extract_datetime for other languages
     return text
+
+
 # ==============================================================
 
 
@@ -180,6 +187,8 @@ def normalize(text, lang="en-us", remove_articles=True):
         return normalize_fr(text, remove_articles)
     elif lang_lower.startswith("sv"):
         return normalize_sv(text, remove_articles)
+    elif lang_lower.startswith("ru"):
+        return normalize_ru(text, remove_articles)
     # TODO: Normalization for other languages
     return text
 
